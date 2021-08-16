@@ -7,7 +7,7 @@ android {
     buildToolsVersion "30.0.2"
 
     defaultConfig {
-        applicationId "com.dataserve.bloo"
+        applicationId "com.dataserve.bluetoothtrail"
         minSdkVersion 28
         targetSdkVersion 30
         versionCode 1

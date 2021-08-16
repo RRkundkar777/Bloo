@@ -1,3 +1,7 @@
 <resources>
-    <string name="app_name">Bloo</string>
+    <string name="app_name">Bluetooth trail</string>
+    <string name="On">Turn On</string>
+    <string name="Off">Turn OFf</string>
+    <string name="discover">discoverable</string>
+    <string name="Pair">Get Paired Devices</string>
 </resources>

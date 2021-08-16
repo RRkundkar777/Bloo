@@ -1,4 +1,4 @@
-package com.dataserve.bloo;
+package com.dataserve.bluetoothtrail;
 
 import android.content.Context;
 
@@ -21,6 +21,6 @@ public class ExampleInstrumentedTest {
     public void useAppContext() {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
-        assertEquals("com.dataserve.bloo", appContext.getPackageName());
+        assertEquals("com.dataserve.bluetoothtrail", appContext.getPackageName());
     }
 }

@@ -1,4 +1,4 @@
-package com.dataserve.bloo;
+package com.dataserve.bluetoothtrail;
 
 import org.junit.Test;
 
