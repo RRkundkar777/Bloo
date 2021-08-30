@@ -11,34 +11,46 @@ import android.annotation.TargetApi;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
+import java.util.UUID;
+
+import static android.content.ContentValues.TAG;
 
 public class MainActivity extends AppCompatActivity {
-
-    private static final int REQUEST_ENABLE_BT = 0;
-    private static final int REQUEST_DISCOVER_BT = 1;
-
     // Bluetooth Permissions
     private static final int MY_PERMISSIONS_REQUEST_CODE = 123;
+    private static final UUID MY_UUID = UUID.fromString(
+            "68da1326-08f6-11ec-9a03-0242ac130003");
 
     // UI Elements
-    TextView mStatusBlueTv,mPairedTv;
+    TextView mStatusBlueTv;
     ImageView mBlueTv;
-    Button mOnBtn,mOffBtn,mDiscoverBtn,mPairedBtn;
+    Button mOnBtn,mOffBtn,mRegisterBtn;
 
-    // Bluetooth Access
+    // Bluetooth Adaptor
     BluetoothAdapter mBlueAdaptor;
+
+    // Bluetooth Device
+    String infinitePair = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,33 +59,61 @@ public class MainActivity extends AppCompatActivity {
 
         // UI Elements
         mStatusBlueTv = findViewById(R.id.statusBluetoothTv);
-        mPairedTv = findViewById(R.id.pairedTv);
         mBlueTv = findViewById(R.id.bluetoothTv);
         mOnBtn = findViewById(R.id.onBtn);
         mOffBtn = findViewById(R.id.offBtn);
-        mDiscoverBtn = findViewById(R.id.discoverableBtn);
-        mPairedBtn = findViewById(R.id.pairedBtn);
+        mRegisterBtn = findViewById(R.id.registerBtn);
 
         // Adaptor
         mBlueAdaptor = BluetoothAdapter.getDefaultAdapter();
 
-        // Bluetooth Status
+        // Activity
+        AppCompatActivity mActivity = this;
+
+        // Check if Hardware supports bluetooth
         if(mBlueAdaptor == null) {
             mStatusBlueTv.setText("Bluetooth unavailable");
+            mBlueTv.setImageResource(R.drawable.ic_action_unavailable);
         }
         else{
             mStatusBlueTv.setText("Bluetooth available");
         }
 
-        // Set Image according to status
-        if(mBlueAdaptor.isEnabled()){
-            mBlueTv.setImageResource(R.drawable.ic_action_on);
-        }
-        else{
-            mBlueTv.setImageResource(R.drawable.ic_action_unavailable);
-        }
+        // Set Image
+        mBlueTv.setImageResource(R.drawable.ic_action_off);
 
-        // Button On Event
+        // BroadcastReceiver which keeps bluetooth On
+        final BroadcastReceiver mReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                // Action
+                String action = intent.getAction();
+
+                // Bluetooth State changed
+                if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
+                    // Bluetooth is Off --> Turn it on
+                    if (mBlueAdaptor.getState() == BluetoothAdapter.STATE_OFF) {
+                        // The user bluetooth is already disabled.
+                        mBlueAdaptor.enable();
+
+                        if(infinitePair != null) {
+                            Set<BluetoothDevice> pairedDevices =
+                                    mBlueAdaptor.getBondedDevices();
+                            for (BluetoothDevice device : pairedDevices) {
+                                if (device.getName() == infinitePair) {
+                                    connectPairedDevice(device);
+                                    break;
+                                }
+                            }
+                            showToast(infinitePair);
+                        }
+                        return;
+                    }
+                }
+            }
+        };
+
+        // On Button
         mOnBtn.setOnClickListener(new View.OnClickListener(){
             @Override
             public void onClick(View v){
@@ -81,116 +121,95 @@ public class MainActivity extends AppCompatActivity {
                 if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
                     checkPermission();
                 }
-                // If bluetooth is off --> Turn it on
-                if(!mBlueAdaptor.isEnabled()) {
-                    showToast("Turning On Bluetooth ...");
-                    mBlueAdaptor.enable();
-                    mBlueTv.setImageResource(R.drawable.ic_action_on);
-                }
-                else{
-                    showToast("Bluetooth is already on");
-                }
+                showToast("Turning On Bloo");
+                mBlueAdaptor.enable();
+
+                // Registering Broadcaster
+                mActivity.registerReceiver(mReceiver,
+                        new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
+                mBlueTv.setImageResource(R.drawable.ic_action_on);
             }
         });
 
-        // Button Discover Event
-        mDiscoverBtn.setOnClickListener(new View.OnClickListener(){
-            @Override
-            public void onClick(View v){
-                // Permission Grant
-                if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
-                    checkPermission();
-                }
-                // If not discoverable --> Set to Discoverable
-                if(!mBlueAdaptor.isDiscovering()){
-                    showToast("Making Your Device Discoverable");
-                    Intent intent = new Intent (BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
-                    startActivityForResult(intent,REQUEST_DISCOVER_BT);
-                    // Set icon
-                    mBlueTv.setImageResource(R.drawable.ic_action_discoverable);
-                }
-                else{
-                    showToast("Device is already set to discoverable");
-                }
-            }
-        });
-
+        // Off Button
         mOffBtn.setOnClickListener(new View.OnClickListener(){
-            @Override
-            public void onClick(View v){
-                // Permission Grant
-                    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
-                        checkPermission();
-                    }
-                    // If bluetooth is enabled --> disable it
-                    if(mBlueAdaptor.isEnabled()) {
-                        mBlueAdaptor.disable();
-                        showToast("Turning Off Bluetooth");
-                        mBlueTv.setImageResource(R.drawable.ic_action_off);
-                    }
-                    else{
-                        showToast("Bluetooth is already off");
-                    }
-            }
-        });
-
-        mPairedBtn.setOnClickListener(new View.OnClickListener(){
             @Override
             public void onClick(View v){
                     // Permission Grant
                     if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
                         checkPermission();
                     }
-
-                    // Check if bluetooth is on
-                    if(mBlueAdaptor.isEnabled()){
-
-                        if(mPairedTv.getText() == "U") {
-                            // Update the paired devices list
-                            mPairedTv.setText("Paired Devices");
-                            Set<BluetoothDevice> devices = mBlueAdaptor.getBondedDevices();
-
-                            // List the devices
-                            for (BluetoothDevice device : devices) {
-                                mPairedTv.append("\nDevice: " +
-                                        device.getName() + "    " + "(" + device + ")" );
-                            }
-//                            mPairedBtn.setText("Hide Paired Devices");
-                        }
-                        else{
-                            mPairedTv.setText("U");
-                            showToast("Python");
-//                            mPairedBtn.setText("Show Paired Devices");
-                        }
-                    }
-                    else{
-                        showToast("Turn on bluetooth");
-                    }
+                    showToast("Turning Off Bloo");
+                    mActivity.unregisterReceiver(mReceiver);
+                    mBlueTv.setImageResource(R.drawable.ic_action_off);
+                    mBlueAdaptor.disable();
             }
         });
-    }
 
-    @Override
-    public void onActivityResult(int requestCode,int resultCode, Intent data) {
-        switch(requestCode){
-            case REQUEST_ENABLE_BT:
-                if(resultCode == RESULT_OK){
-                    mBlueTv.setImageResource(R.drawable.ic_action_on);
-                    showToast("Bluetooth On");
+        // Register Btn
+        mRegisterBtn.setOnClickListener(new View.OnClickListener(){
+            @Override
+            public void onClick(View v) {
+                // Permission Grant
+                if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
+                    checkPermission();
                 }
-                else{
-                    showToast("Couldn't On Bluetooth");
-                }
-                break;
-        }
-        super.onActivityResult(requestCode,resultCode, data);
-    }
 
+                // Enable Bluetooth
+                if(!mBlueAdaptor.isEnabled()){
+                    showToast("Turn On Bluetooth");
+                    return;
+                }
+
+                // Get Device List
+                Set <BluetoothDevice> pairedDevices = mBlueAdaptor.getBondedDevices();
+                List <String> deviceList = new ArrayList<String>();
+                for(BluetoothDevice device : pairedDevices){
+                    deviceList.add(device.getName());
+                }
+                // Final Device Names
+                CharSequence[] deviceNames = deviceList.toArray(new CharSequence
+                        [deviceList.size()]);
+
+
+                // Register Device
+                AlertDialog.Builder register = new AlertDialog.Builder(mActivity);
+                register.setTitle("Register Bluetooth Device");
+
+                // Set Choices
+                register.setSingleChoiceItems(deviceNames,0,
+                        new DialogInterface.OnClickListener(){
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                showToast("Selected " + deviceNames[which]);
+                                infinitePair = deviceNames[which].toString();
+                                // Set Device Name to Button
+                                mRegisterBtn.setText(infinitePair);
+                            }
+                        });
+
+                // Set OK Button
+                register.setPositiveButton("Register",
+                        new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        showToast("Device Registered Successfully");
+                    }
+                });
+
+                // Set Cancel Button
+                register.setNegativeButton("Cancel", null);
+
+                // Execute
+                register.show();
+            }
+        });
+
+    }
 
     protected void checkPermission(){
         // Check if Permission is granted
-        if(ContextCompat.checkSelfPermission(this,Manifest.permission.CAMERA)
-                + ContextCompat.checkSelfPermission(
+        if(ContextCompat.checkSelfPermission(
                 this,Manifest.permission.BLUETOOTH)
                 + ContextCompat.checkSelfPermission(
                 this,Manifest.permission.BLUETOOTH_ADMIN)
@@ -205,8 +224,6 @@ public class MainActivity extends AppCompatActivity {
 
             // Do something, when permissions not granted
             if(ActivityCompat.shouldShowRequestPermissionRationale(
-                    this,Manifest.permission.CAMERA)
-                    || ActivityCompat.shouldShowRequestPermissionRationale(
                     this,Manifest.permission.BLUETOOTH)
                     || ActivityCompat.shouldShowRequestPermissionRationale(
                     this,Manifest.permission.BLUETOOTH_ADMIN)
@@ -232,7 +249,6 @@ public class MainActivity extends AppCompatActivity {
                         ActivityCompat.requestPermissions(
                                 MainActivity.this,
                                 new String[]{
-                                        Manifest.permission.CAMERA,
                                         Manifest.permission.BLUETOOTH_ADMIN,
                                         Manifest.permission.BLUETOOTH,
                                         Manifest.permission.ACCESS_BACKGROUND_LOCATION,
@@ -243,6 +259,7 @@ public class MainActivity extends AppCompatActivity {
                         );
                     }
                 });
+
                 // Set cancel button
                 builder.setNeutralButton("Cancel",null);
                 // Show Dialog
@@ -253,7 +270,6 @@ public class MainActivity extends AppCompatActivity {
                 ActivityCompat.requestPermissions(
                         this,
                         new String[]{
-                                Manifest.permission.CAMERA,
                                 Manifest.permission.BLUETOOTH_ADMIN,
                                 Manifest.permission.BLUETOOTH,
                                 Manifest.permission.ACCESS_BACKGROUND_LOCATION,
@@ -271,25 +287,25 @@ public class MainActivity extends AppCompatActivity {
 
     // Decide what happens when RequestPermissions is run
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults){
+    public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                                           int[] grantResults){
         super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+        boolean status = true;
         switch (requestCode){
             case MY_PERMISSIONS_REQUEST_CODE:{
                 // When request is cancelled, the results array are empty
                 // Permissions Status
-                boolean status = true;
-
                 for (int grantResult : grantResults) {
                     if (grantResult == PackageManager.PERMISSION_DENIED) {
                         status = false;
                         break;
                     }
-
                 }
+                
                 if((grantResults.length > 0) && status){
                     // Permissions are granted
-                    //Toast.makeText(getApplicationContext(),"Permissions granted.",
-                      //      Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getApplicationContext(),"Permissions granted.",
+                            Toast.LENGTH_SHORT).show();
 
                 }else {
                     // Permissions are denied
@@ -304,5 +320,35 @@ public class MainActivity extends AppCompatActivity {
     // Function to show Toast
     private void showToast(String msg){
         Toast.makeText(this,msg,Toast.LENGTH_SHORT).show();
+    }
+
+    private void connectPairedDevice(BluetoothDevice device){
+        if(device.getBondState() == device.BOND_BONDED){
+            Log.d(TAG,device.getName());
+            BluetoothSocket mSocket = null;
+
+            try {
+                mSocket = device.createInsecureRfcommSocketToServiceRecord(MY_UUID);
+
+            } catch(IOException err){
+                Log.d(TAG,"Socket not Created");
+                showToast("Socket not Created");
+                err.printStackTrace();
+            }
+            try{
+                mSocket.connect();
+            }catch (IOException err){
+                try{
+                    mSocket.close();
+                    Log.d(TAG,"Cannot Connect");
+                    showToast("Cannot Connect");
+                }catch(IOException err1){
+                    Log.d(TAG,"Socket not closed");
+                    showToast("Socket not closed");
+                    err1.printStackTrace();
+                }
+                err.printStackTrace();
+            }
+        }
     }
 }
