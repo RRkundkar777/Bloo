@@ -35,11 +35,13 @@ import java.util.UUID;
 
 import static android.content.ContentValues.TAG;
 
+// MainActivity
 public class MainActivity extends AppCompatActivity {
-    // Bluetooth Permissions
+    // Bluetooth code and UUID
     private static final int MY_PERMISSIONS_REQUEST_CODE = 123;
     private static final UUID MY_UUID = UUID.fromString(
             "68da1326-08f6-11ec-9a03-0242ac130003");
+    private boolean isRegistered = false;
 
     // UI Elements
     TextView mStatusBlueTv;
@@ -52,6 +54,7 @@ public class MainActivity extends AppCompatActivity {
     // Bluetooth Device
     String infinitePair = null;
 
+    // Application start
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -79,7 +82,7 @@ public class MainActivity extends AppCompatActivity {
             mStatusBlueTv.setText("Bluetooth available");
         }
 
-        // Set Image
+        // Set Image according to status
         mBlueTv.setImageResource(R.drawable.ic_action_off);
 
         // BroadcastReceiver which keeps bluetooth On
@@ -96,17 +99,18 @@ public class MainActivity extends AppCompatActivity {
                         // The user bluetooth is already disabled.
                         mBlueAdaptor.enable();
 
-                        if(infinitePair != null) {
-                            Set<BluetoothDevice> pairedDevices =
-                                    mBlueAdaptor.getBondedDevices();
-                            for (BluetoothDevice device : pairedDevices) {
-                                if (device.getName() == infinitePair) {
-                                    connectPairedDevice(device);
-                                    break;
-                                }
-                            }
-                            showToast(infinitePair);
-                        }
+                        // Unsuccessful attempt to connect to bluetooth
+//                        if(infinitePair != null) {
+//                            Set<BluetoothDevice> pairedDevices =
+//                                    mBlueAdaptor.getBondedDevices();
+//                            for (BluetoothDevice device : pairedDevices) {
+//                                if (device.getName() == infinitePair) {
+//                                    connectPairedDevice(device);
+//                                    break;
+//                                }
+//                            }
+//                            showToast(infinitePair);
+//                        }
                         return;
                     }
                 }
@@ -125,9 +129,12 @@ public class MainActivity extends AppCompatActivity {
                 mBlueAdaptor.enable();
 
                 // Registering Broadcaster
-                mActivity.registerReceiver(mReceiver,
-                        new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
-                mBlueTv.setImageResource(R.drawable.ic_action_on);
+                if(!isRegistered) {
+                    mActivity.registerReceiver(mReceiver,
+                            new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
+                    mBlueTv.setImageResource(R.drawable.ic_action_on);
+                    isRegistered = true;
+                }
             }
         });
 
@@ -140,9 +147,13 @@ public class MainActivity extends AppCompatActivity {
                         checkPermission();
                     }
                     showToast("Turning Off Bloo");
-                    mActivity.unregisterReceiver(mReceiver);
-                    mBlueTv.setImageResource(R.drawable.ic_action_off);
-                    mBlueAdaptor.disable();
+                    // unregister the receiver
+                    if(isRegistered) {
+                        mActivity.unregisterReceiver(mReceiver);
+                        mBlueTv.setImageResource(R.drawable.ic_action_off);
+                        isRegistered = false;
+                    }
+                mBlueAdaptor.disable();
             }
         });
 
@@ -164,9 +175,11 @@ public class MainActivity extends AppCompatActivity {
                 // Get Device List
                 Set <BluetoothDevice> pairedDevices = mBlueAdaptor.getBondedDevices();
                 List <String> deviceList = new ArrayList<String>();
+
                 for(BluetoothDevice device : pairedDevices){
                     deviceList.add(device.getName());
                 }
+
                 // Final Device Names
                 CharSequence[] deviceNames = deviceList.toArray(new CharSequence
                         [deviceList.size()]);
@@ -207,8 +220,9 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    // Ask or Check for permission
     protected void checkPermission(){
-        // Check if Permission is granted
+        // Check if Permissions are granted
         if(ContextCompat.checkSelfPermission(
                 this,Manifest.permission.BLUETOOTH)
                 + ContextCompat.checkSelfPermission(
@@ -318,37 +332,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // Function to show Toast
-    private void showToast(String msg){
+    private void showToast(String msg) {
         Toast.makeText(this,msg,Toast.LENGTH_SHORT).show();
-    }
-
-    private void connectPairedDevice(BluetoothDevice device){
-        if(device.getBondState() == device.BOND_BONDED){
-            Log.d(TAG,device.getName());
-            BluetoothSocket mSocket = null;
-
-            try {
-                mSocket = device.createInsecureRfcommSocketToServiceRecord(MY_UUID);
-
-            } catch(IOException err){
-                Log.d(TAG,"Socket not Created");
-                showToast("Socket not Created");
-                err.printStackTrace();
-            }
-            try{
-                mSocket.connect();
-            }catch (IOException err){
-                try{
-                    mSocket.close();
-                    Log.d(TAG,"Cannot Connect");
-                    showToast("Cannot Connect");
-                }catch(IOException err1){
-                    Log.d(TAG,"Socket not closed");
-                    showToast("Socket not closed");
-                    err1.printStackTrace();
-                }
-                err.printStackTrace();
-            }
-        }
     }
 }
